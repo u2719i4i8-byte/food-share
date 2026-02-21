@@ -181,17 +181,21 @@ export default {
         },
         // 获取评论列表
         fetchComments(contentId) {
-            this.$axios.get(`/evaluation/queryByContentId/${contentId}`).then(res => {
+            this.$axios.get(`/evaluations/list/${contentId}/gourmet`).then(res => {
                 const { data } = res;
                 if (data.code === 200) {
-                    this.comments = (data.data || []).map(item => ({
+                    const result = data.data || { count: 0, data: [] };
+                    this.commentCount = result.count || 0;
+                    this.comments = (result.data || []).map(item => ({
+                        id: item.id,
                         avatar: item.userAvatar || this.defaultAvatar,
                         author: item.userName || '匿名用户',
                         text: item.content,
                         time: item.createTime ? item.createTime.substring(0, 16) : '',
-                        likes: 0
+                        likes: item.upvoteCount || 0,
+                        upvoteFlag: item.upvoteFlag || false,
+                        children: item.commentChildVOS || []
                     }));
-                    this.commentCount = this.comments.length;
                 }
             }).catch(error => {
                 console.log("获取评论异常：", error);
@@ -240,22 +244,14 @@ export default {
             const params = { 
                 contentId: this.gourmetId, 
                 content: this.newComment,
-                userName: this.userName,
-                userAvatar: this.userAvatar
+                contentType: 'gourmet'
             };
-            this.$axios.post('/evaluation/save', params).then(res => {
+            this.$axios.post('/evaluations/insert', params).then(res => {
                 const { data } = res;
                 if (data.code === 200) {
-                    this.comments.unshift({
-                        avatar: this.userAvatar,
-                        author: this.userName,
-                        text: this.newComment,
-                        time: '刚刚',
-                        likes: 0
-                    });
-                    this.commentCount++;
                     this.newComment = '';
                     this.$message.success('评论发布成功！');
+                    this.fetchComments(this.gourmetId);
                 } else {
                     this.$message.error(data.msg || '评论发布失败');
                 }
