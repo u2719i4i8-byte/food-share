@@ -1,5 +1,20 @@
 <template>
     <div class="detail-page">
+        <!-- 删除确认弹窗 -->
+        <div class="delete-modal-overlay" v-if="showDeleteModal" @click.self="cancelDelete">
+            <div class="delete-modal">
+                <div class="modal-icon">
+                    <i class="el-icon-delete"></i>
+                </div>
+                <h3 class="modal-title">确认删除</h3>
+                <p class="modal-desc">删除后将无法恢复，确定要删除这条评论吗？</p>
+                <div class="modal-actions">
+                    <button class="btn-cancel" @click="cancelDelete">取消</button>
+                    <button class="btn-confirm" @click="confirmDelete">确定删除</button>
+                </div>
+            </div>
+        </div>
+
         <header class="header">
             <div class="header-content">
                 <div class="back-btn" @click="goBack">
@@ -164,7 +179,9 @@ export default {
             defaultCover: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2ZmZjVmMCIvPjxjaXJjbGUgY3g9IjIwMCIgY3k9IjE1MCIgcj0iNjAiIGZpbGw9IiNmZjZiMzUiIG9wYWNpdHk9IjAuMyIvPjx0ZXh0IHg9IjIwMCIgeT0iMTUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjI0IiBmaWxsPSIjZmY2YjM1IiBvcGFjaXR5PSIwLjYiPuObluWutDwvdGV4dD48L3N2Zz4=',
             comments: [],           // 评论列表
             relatedNotes: [],       // 相关推荐列表
-            showRecommend: true     // 是否显示推荐
+            showRecommend: true,    // 是否显示推荐
+            showDeleteModal: false, // 删除确认弹窗
+            deleteTargetId: null    // 待删除的评论ID
         }
     },
     created() {
@@ -325,24 +342,32 @@ export default {
         },
         // 删除评论
         deleteComment(commentId) {
-            this.$confirm('确定要删除这条评论吗？', '提示', {
-                confirmButtonText: '确定',
-                cancelButtonText: '取消',
-                type: 'warning'
-            }).then(() => {
-                this.$axios.delete(`/evaluations/delete/${commentId}`).then(res => {
-                    const { data } = res;
-                    if (data.code === 200) {
-                        this.$message.success('删除成功');
-                        this.fetchComments(this.gourmetId);
-                    } else {
-                        this.$message.error(data.msg || '删除失败');
-                    }
-                }).catch(error => {
-                    console.log("删除评论异常：", error);
-                    this.$message.error('删除失败，请重试');
-                });
-            }).catch(() => {});
+            this.deleteTargetId = commentId;
+            this.showDeleteModal = true;
+        },
+        // 取消删除
+        cancelDelete() {
+            this.showDeleteModal = false;
+            this.deleteTargetId = null;
+        },
+        // 确认删除
+        confirmDelete() {
+            if (!this.deleteTargetId) return;
+            this.$axios.delete(`/evaluations/delete/${this.deleteTargetId}`).then(res => {
+                const { data } = res;
+                if (data.code === 200) {
+                    this.$message.success('删除成功');
+                    this.fetchComments(this.gourmetId);
+                } else {
+                    this.$message.error(data.msg || '删除失败');
+                }
+            }).catch(error => {
+                console.log("删除评论异常：", error);
+                this.$message.error('删除失败，请重试');
+            }).finally(() => {
+                this.showDeleteModal = false;
+                this.deleteTargetId = null;
+            });
         },
         // 切换回复框显示
         toggleReply(comment) {
@@ -464,6 +489,42 @@ $primary-light: #FF8C5A;
 }
 
 .main-container { display: flex; gap: 24px; max-width: 1200px; margin: 0 auto; padding: 24px }
+
+// 删除确认弹窗样式
+.delete-modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+    animation: fadeIn 0.2s ease;
+}
+.delete-modal {
+    background: #fff; border-radius: 20px; padding: 32px;
+    width: 360px; text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    animation: slideUp 0.3s ease;
+    .modal-icon {
+        width: 64px; height: 64px; margin: 0 auto 20px;
+        background: linear-gradient(135deg, #fff5f0, #ffe8dc);
+        border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        i { font-size: 28px; color: $primary }
+    }
+    .modal-title { font-size: 20px; font-weight: 600; color: #333; margin: 0 0 12px 0 }
+    .modal-desc { font-size: 14px; color: #666; margin: 0 0 28px 0; line-height: 1.6 }
+    .modal-actions { display: flex; gap: 12px;
+        button { flex: 1; padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.3s; }
+        .btn-cancel {
+            background: #f5f5f5; border: none; color: #666;
+            &:hover { background: #eee }
+        }
+        .btn-confirm {
+            background: linear-gradient(135deg, $primary, $primary-light); border: none; color: #fff;
+            &:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255,107,53,0.3) }
+        }
+    }
+}
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px) } to { opacity: 1; transform: translateY(0) } }
 
 .article-wrapper { flex: 1; min-width: 0 }
 
