@@ -180,7 +180,7 @@ export default {
             comments: [],           // 评论列表
             relatedNotes: [],       // 相关推荐列表
             showRecommend: true,    // 是否显示推荐
-            showDeleteModal: false, // 删除确认弹窗
+            showDeleteModal: false, // 删除确认弹窗状态
             deleteTargetId: null    // 待删除的评论ID
         }
     },
