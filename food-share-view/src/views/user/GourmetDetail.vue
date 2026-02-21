@@ -70,8 +70,41 @@
                                 </div>
                                 <p class="comment-text">{{ comment.text }}</p>
                                 <div class="comment-actions">
-                                    <span class="action-btn"><i class="el-icon-star-off"></i> {{ comment.likes || 0 }}</span>
-                                    <span class="action-btn"><i class="el-icon-chat-dot-round"></i> 回复</span>
+                                    <span class="action-btn" @click="toggleReply(comment)">
+                                        <i class="el-icon-chat-dot-round"></i> 回复
+                                    </span>
+                                    <span class="action-btn delete-btn" v-if="comment.userId === userId" @click="deleteComment(comment.id)">
+                                        <i class="el-icon-delete"></i> 删除
+                                    </span>
+                                </div>
+                                <div class="reply-input-box" v-if="comment.showReply">
+                                    <input type="text" v-model="comment.replyContent" placeholder="输入回复..." @keyup.enter="sendReply(comment)">
+                                    <button @click="sendReply(comment)" :disabled="!comment.replyContent || !comment.replyContent.trim()">发送</button>
+                                </div>
+                                <div class="child-comments" v-if="comment.children && comment.children.length > 0">
+                                    <div class="child-item" v-for="(child, cIndex) in comment.children" :key="cIndex">
+                                        <img :src="child.userAvatar || defaultAvatar" class="child-avatar">
+                                        <div class="child-body">
+                                            <div class="child-header">
+                                                <span class="child-author">{{ child.userName }}</span>
+                                                <span class="reply-arrow" v-if="child.replierName">回复 <em>{{ child.replierName }}</em></span>
+                                                <span class="child-time">{{ child.createTime ? child.createTime.substring(0, 16) : '' }}</span>
+                                            </div>
+                                            <p class="child-text">{{ child.content }}</p>
+                                            <div class="child-actions">
+                                                <span class="action-btn" @click="toggleChildReply(comment, child)">
+                                                    <i class="el-icon-chat-dot-round"></i> 回复
+                                                </span>
+                                                <span class="action-btn delete-btn" v-if="child.userId === userId" @click="deleteComment(child.id)">
+                                                    <i class="el-icon-delete"></i> 删除
+                                                </span>
+                                            </div>
+                                            <div class="reply-input-box" v-if="child.showReply">
+                                                <input type="text" v-model="child.replyContent" placeholder="输入回复..." @keyup.enter="sendChildReply(comment, child)">
+                                                <button @click="sendChildReply(comment, child)" :disabled="!child.replyContent || !child.replyContent.trim()">发送</button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -188,13 +221,27 @@ export default {
                     this.commentCount = result.count || 0;
                     this.comments = (result.data || []).map(item => ({
                         id: item.id,
+                        userId: item.userId,
                         avatar: item.userAvatar || this.defaultAvatar,
                         author: item.userName || '匿名用户',
                         text: item.content,
                         time: item.createTime ? item.createTime.substring(0, 16) : '',
                         likes: item.upvoteCount || 0,
                         upvoteFlag: item.upvoteFlag || false,
-                        children: item.commentChildVOS || []
+                        showReply: false,
+                        replyContent: '',
+                        children: (item.commentChildVOS || []).map(child => ({
+                            id: child.id,
+                            userId: child.userId,
+                            parentId: child.parentId,
+                            userAvatar: child.userAvatar,
+                            userName: child.userName,
+                            replierName: child.replierName,
+                            content: child.content,
+                            createTime: child.createTime,
+                            showReply: false,
+                            replyContent: ''
+                        }))
                     }));
                 }
             }).catch(error => {
@@ -259,6 +306,94 @@ export default {
                 console.log("评论发布异常：", error);
                 this.$message.error('评论发布失败，请重试');
             })
+        },
+        // 删除评论
+        deleteComment(commentId) {
+            this.$confirm('确定要删除这条评论吗？', '提示', {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }).then(() => {
+                this.$axios.delete(`/evaluations/delete/${commentId}`).then(res => {
+                    const { data } = res;
+                    if (data.code === 200) {
+                        this.$message.success('删除成功');
+                        this.fetchComments(this.gourmetId);
+                    } else {
+                        this.$message.error(data.msg || '删除失败');
+                    }
+                }).catch(error => {
+                    console.log("删除评论异常：", error);
+                    this.$message.error('删除失败，请重试');
+                });
+            }).catch(() => {});
+        },
+        // 切换回复框显示
+        toggleReply(comment) {
+            if (!isLoggedIn()) {
+                this.$message.warning('请先登录');
+                return this.$router.push('/login');
+            }
+            this.$set(comment, 'showReply', !comment.showReply);
+            if (!comment.replyContent) {
+                this.$set(comment, 'replyContent', '');
+            }
+        },
+        // 切换子评论回复框显示
+        toggleChildReply(parentComment, childComment) {
+            if (!isLoggedIn()) {
+                this.$message.warning('请先登录');
+                return this.$router.push('/login');
+            }
+            this.$set(childComment, 'showReply', !childComment.showReply);
+            if (!childComment.replyContent) {
+                this.$set(childComment, 'replyContent', '');
+            }
+        },
+        // 发送回复（父级评论）
+        sendReply(comment) {
+            if (!comment.replyContent || !comment.replyContent.trim()) return;
+            const params = {
+                contentId: this.gourmetId,
+                content: comment.replyContent,
+                contentType: 'gourmet',
+                parentId: comment.id
+            };
+            this.$axios.post('/evaluations/insert', params).then(res => {
+                const { data } = res;
+                if (data.code === 200) {
+                    this.$message.success('回复成功');
+                    this.fetchComments(this.gourmetId);
+                } else {
+                    this.$message.error(data.msg || '回复失败');
+                }
+            }).catch(error => {
+                console.log("回复异常：", error);
+                this.$message.error('回复失败，请重试');
+            });
+        },
+        // 发送子评论回复
+        sendChildReply(parentComment, childComment) {
+            if (!childComment.replyContent || !childComment.replyContent.trim()) return;
+            const params = {
+                contentId: this.gourmetId,
+                content: childComment.replyContent,
+                contentType: 'gourmet',
+                parentId: parentComment.id,
+                replierId: childComment.userId
+            };
+            this.$axios.post('/evaluations/insert', params).then(res => {
+                const { data } = res;
+                if (data.code === 200) {
+                    this.$message.success('回复成功');
+                    this.fetchComments(this.gourmetId);
+                } else {
+                    this.$message.error(data.msg || '回复失败');
+                }
+            }).catch(error => {
+                console.log("回复异常：", error);
+                this.$message.error('回复失败，请重试');
+            });
         },
         // 返回上一页
         goBack() {
@@ -410,6 +545,46 @@ $primary-light: #FF8C5A;
             .comment-actions { display: flex; gap: 16px;
                 .action-btn { font-size: 12px; color: #999; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: color 0.3s;
                     &:hover { color: $primary }
+                    &.delete-btn:hover { color: #f56c6c }
+                }
+            }
+            .reply-input-box { display: flex; gap: 8px; margin-top: 12px;
+                input { flex: 1; height: 36px; border: 1px solid #eee; border-radius: 18px; padding: 0 14px; font-size: 13px; outline: none;
+                    &:focus { border-color: $primary }
+                }
+                button { padding: 0 16px; border: none; border-radius: 18px; background: $primary; color: #fff; font-size: 13px; cursor: pointer;
+                    &:hover:not(:disabled) { background: $primary-light }
+                    &:disabled { opacity: 0.5; cursor: not-allowed }
+                }
+            }
+            .child-comments { margin-top: 12px; padding-left: 16px; border-left: 2px solid #f0f0f0;
+                .child-item { display: flex; gap: 10px; padding: 10px 0;
+                    .child-avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0 }
+                    .child-body { flex: 1;
+                        .child-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+                            .child-author { font-size: 13px; font-weight: 500; color: #333 }
+                            .reply-arrow { font-size: 12px; color: #999;
+                                em { font-style: normal; color: $primary }
+                            }
+                            .child-time { font-size: 11px; color: #bbb; margin-left: auto }
+                        }
+                        .child-text { font-size: 13px; color: #555; line-height: 1.5; margin: 0 0 6px 0 }
+                        .child-actions { display: flex; gap: 12px;
+                            .action-btn { font-size: 11px; color: #aaa; cursor: pointer; display: flex; align-items: center; gap: 3px;
+                                &:hover { color: $primary }
+                                &.delete-btn:hover { color: #f56c6c }
+                            }
+                        }
+                        .reply-input-box { display: flex; gap: 8px; margin-top: 8px;
+                            input { flex: 1; height: 32px; border: 1px solid #eee; border-radius: 16px; padding: 0 12px; font-size: 12px; outline: none;
+                                &:focus { border-color: $primary }
+                            }
+                            button { padding: 0 14px; border: none; border-radius: 16px; background: $primary; color: #fff; font-size: 12px; cursor: pointer;
+                                &:hover:not(:disabled) { background: $primary-light }
+                                &:disabled { opacity: 0.5; cursor: not-allowed }
+                            }
+                        }
+                    }
                 }
             }
         }
