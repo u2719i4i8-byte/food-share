@@ -89,7 +89,7 @@
                     @click="readGourmet(gourmet)"
                 >
                     <div class="card-cover">
-                        <img :src="gourmet.cover" :alt="gourmet.title" loading="lazy">
+                        <img :src="gourmet.cover" :alt="gourmet.title" loading="lazy" @error="handleImageError">
                     </div>
                     <div class="card-content">
                         <h3 class="card-title">{{ gourmet.title }}</h3>
@@ -155,6 +155,7 @@ export default {
             currentTags: [0, 0, 0, 0, 0], // 各分类组当前选中的标签索引
             categoryNameMap: {},       // 分类名称到ID的映射
             defaultAvatar: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iI0ZGNkIzNSIvPjxjaXJjbGUgY3g9IjUwIiBjeT0iMzgiIHI9IjE4IiBmaWxsPSIjZmZmIi8+PGVsbGlwc2UgY3g9IjUwIiBjeT0iODUiIHJ4PSIyNSIgcnk9IjIwIiBmaWxsPSIjZmZmIi8+PC9zdmc+',
+            defaultCover: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2ZmZjVmMCIvPjxjaXJjbGUgY3g9IjIwMCIgY3k9IjE1MCIgcj0iNjAiIGZpbGw9IiNmZjZiMzUiIG9wYWNpdHk9IjAuMyIvPjx0ZXh0IHg9IjIwMCIgeT0iMTUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjI0IiBmaWxsPSIjZmY2YjM1IiBvcGFjaXR5PSIwLjYiPuObluWutDwvdGV4dD48L3N2Zz4=',
             // 分类组配置：菜系、场景、食材、做法、特色
             categoryGroups: [
                 {
@@ -234,6 +235,10 @@ export default {
         this.stopTimers();
     },
     methods: {
+        // 图片加载失败处理
+        handleImageError(e) {
+            e.target.src = this.defaultCover;
+        },
         // 初始化用户状态
         initUserState() {
             if (this.isLogin) {

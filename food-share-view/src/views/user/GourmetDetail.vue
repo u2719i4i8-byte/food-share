@@ -124,7 +124,7 @@
                     </div>
                     <div class="recommend-list">
                         <div class="recommend-item" v-for="(note, index) in relatedNotes" :key="index" @click="readGourmet(note)">
-                            <img :src="note.cover" class="recommend-cover">
+                            <img :src="note.cover" class="recommend-cover" @error="handleImageError">
                             <div class="recommend-info">
                                 <h4>{{ note.title }}</h4>
                                 <div class="recommend-meta">
@@ -161,6 +161,7 @@ export default {
             userName: '',           // 用户名称
             userId: null,           // 用户ID
             defaultAvatar: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iI0ZGNkIzNSIvPjxjaXJjbGUgY3g9IjUwIiBjeT0iMzgiIHI9IjE4IiBmaWxsPSIjZmZmIi8+PGVsbGlwc2UgY3g9IjUwIiBjeT0iODUiIHJ4PSIyNSIgcnk9IjIwIiBmaWxsPSIjZmZmIi8+PC9zdmc+',
+            defaultCover: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2ZmZjVmMCIvPjxjaXJjbGUgY3g9IjIwMCIgY3k9IjE1MCIgcj0iNjAiIGZpbGw9IiNmZjZiMzUiIG9wYWNpdHk9IjAuMyIvPjx0ZXh0IHg9IjIwMCIgeT0iMTUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjI0IiBmaWxsPSIjZmY2YjM1IiBvcGFjaXR5PSIwLjYiPuObluWutDwvdGV4dD48L3N2Zz4=',
             comments: [],           // 评论列表
             relatedNotes: [],       // 相关推荐列表
             showRecommend: true     // 是否显示推荐
@@ -176,6 +177,10 @@ export default {
         window.removeEventListener('resize', this.checkScreenWidth);
     },
     methods: {
+        // 图片加载失败处理
+        handleImageError(e) {
+            e.target.src = this.defaultCover;
+        },
         // 加载用户信息
         loadUserInfo() {
             const { userName, userAvatar, userId } = getUserInfo();

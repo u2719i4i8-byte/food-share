@@ -102,7 +102,7 @@
                         @click="readGourmet(gourmet)"
                     >
                         <div class="card-cover">
-                            <img :src="gourmet.cover" :alt="gourmet.title">
+                            <img :src="gourmet.cover" :alt="gourmet.title" @error="handleImageError">
                             <div class="card-overlay">
                                 <span class="view-btn">
                                     <i class="el-icon-view"></i> 查看详情
@@ -165,7 +165,7 @@
                             @click="readGourmet(gourmet)"
                         >
                             <div class="recommend-rank" :class="'rank-' + (index + 1)">{{ index + 1 }}</div>
-                            <img :src="gourmet.cover" class="recommend-cover">
+                            <img :src="gourmet.cover" class="recommend-cover" @error="handleImageError">
                             <div class="recommend-info">
                                 <h4 class="recommend-title">{{ gourmet.title }}</h4>
                                 <div class="recommend-meta">
@@ -210,7 +210,8 @@ export default {
                 ingredient: ['海鲜', '肉食', '素食', '菌菇', '豆制品', '根茎类', '叶菜类', '禽蛋类', '谷物', '坚果', '时令水果'],
                 method: ['烧烤', '火锅', '煎炸', '蒸煮', '焖炖', '凉拌', '烘焙', '爆炒', '煲汤'],
                 feature: ['非遗', '网红', '新手友好', '减脂轻食', '下饭神器', '下酒小菜', '复刻经典']
-            }
+            },
+            defaultCover: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2ZmZjVmMCIvPjxjaXJjbGUgY3g9IjIwMCIgY3k9IjE1MCIgcj0iNjAiIGZpbGw9IiNmZjZiMzUiIG9wYWNpdHk9IjAuMyIvPjx0ZXh0IHg9IjIwMCIgeT0iMTUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjI0IiBmaWxsPSIjZmY2YjM1IiBvcGFjaXR5PSIwLjYiPuObluWutDwvdGV4dD48L3N2Zz4='
         }
     },
     computed: {
@@ -242,6 +243,10 @@ export default {
         this.loadRecommend(this.defaultLoadItem);
     },
     methods: {
+        // 图片加载失败处理
+        handleImageError(e) {
+            e.target.src = this.defaultCover;
+        },
         // 获取分类数据
         fetchCategories() {
             return this.$axios.post('/category/query', { current: 1, size: 100 }).then(res => {
