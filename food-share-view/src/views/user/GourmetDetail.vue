@@ -124,7 +124,7 @@
                     </div>
                     <div class="recommend-list">
                         <div class="recommend-item" v-for="(note, index) in relatedNotes" :key="index" @click="readGourmet(note)">
-                            <img :src="note.cover" class="recommend-cover" @error="handleImageError">
+                            <img :src="getSafeImageUrl(note.cover, 'detail' + index)" class="recommend-cover" @error="handleImageError">
                             <div class="recommend-info">
                                 <h4>{{ note.title }}</h4>
                                 <div class="recommend-meta">
@@ -179,7 +179,18 @@ export default {
     methods: {
         // 图片加载失败处理
         handleImageError(e) {
-            e.target.src = this.defaultCover;
+            const img = e.target;
+            if (img.dataset.error === 'true') return;
+            img.dataset.error = 'true';
+            img.src = this.defaultCover;
+        },
+        // 获取安全的图片URL
+        getSafeImageUrl(url, seed) {
+            if (!url) return this.defaultCover;
+            if (url.includes('unsplash')) {
+                return `https://picsum.photos/seed/${seed || 'food'}/400/300`;
+            }
+            return url;
         },
         // 加载用户信息
         loadUserInfo() {

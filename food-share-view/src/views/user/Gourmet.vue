@@ -102,7 +102,7 @@
                         @click="readGourmet(gourmet)"
                     >
                         <div class="card-cover">
-                            <img :src="gourmet.cover" :alt="gourmet.title" @error="handleImageError">
+                            <img :src="getSafeImageUrl(gourmet.cover, index)" :alt="gourmet.title" @error="handleImageError">
                             <div class="card-overlay">
                                 <span class="view-btn">
                                     <i class="el-icon-view"></i> 查看详情
@@ -165,7 +165,7 @@
                             @click="readGourmet(gourmet)"
                         >
                             <div class="recommend-rank" :class="'rank-' + (index + 1)">{{ index + 1 }}</div>
-                            <img :src="gourmet.cover" class="recommend-cover" @error="handleImageError">
+                            <img :src="getSafeImageUrl(gourmet.cover, 'rec' + index)" class="recommend-cover" @error="handleImageError">
                             <div class="recommend-info">
                                 <h4 class="recommend-title">{{ gourmet.title }}</h4>
                                 <div class="recommend-meta">
@@ -245,7 +245,18 @@ export default {
     methods: {
         // 图片加载失败处理
         handleImageError(e) {
-            e.target.src = this.defaultCover;
+            const img = e.target;
+            if (img.dataset.error === 'true') return;
+            img.dataset.error = 'true';
+            img.src = this.defaultCover;
+        },
+        // 获取安全的图片URL
+        getSafeImageUrl(url, seed) {
+            if (!url) return this.defaultCover;
+            if (url.includes('unsplash')) {
+                return `https://picsum.photos/seed/${seed || 'food'}/400/300`;
+            }
+            return url;
         },
         // 获取分类数据
         fetchCategories() {

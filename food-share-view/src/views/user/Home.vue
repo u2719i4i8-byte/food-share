@@ -89,7 +89,7 @@
                     @click="readGourmet(gourmet)"
                 >
                     <div class="card-cover">
-                        <img :src="gourmet.cover" :alt="gourmet.title" loading="lazy" @error="handleImageError">
+                        <img :src="getSafeImageUrl(gourmet.cover, index)" :alt="gourmet.title" loading="lazy" @error="handleImageError">
                     </div>
                     <div class="card-content">
                         <h3 class="card-title">{{ gourmet.title }}</h3>
@@ -237,7 +237,18 @@ export default {
     methods: {
         // 图片加载失败处理
         handleImageError(e) {
-            e.target.src = this.defaultCover;
+            const img = e.target;
+            if (img.dataset.error === 'true') return;
+            img.dataset.error = 'true';
+            img.src = this.defaultCover;
+        },
+        // 获取安全的图片URL
+        getSafeImageUrl(url, seed) {
+            if (!url) return this.defaultCover;
+            if (url.includes('unsplash')) {
+                return `https://picsum.photos/seed/${seed || 'food'}/400/300`;
+            }
+            return url;
         },
         // 初始化用户状态
         initUserState() {
