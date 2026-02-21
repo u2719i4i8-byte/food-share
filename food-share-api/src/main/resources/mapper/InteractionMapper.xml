@@ -307,5 +307,46 @@
         WHERE g.id IS NOT NULL
     </select>
 
+    <!-- 查询用户收到的点赞消息列表 -->
+    <select id="getLikeNotifications" resultType="cn.kmbeast.pojo.vo.NotificationVO">
+        SELECT 
+            i.id,
+            i.user_id AS userId,
+            u.user_name AS userName,
+            u.user_avatar AS userAvatar,
+            'like' AS type,
+            NULL AS content,
+            i.content_id AS contentId,
+            i.content_type AS contentType,
+            COALESCE(g.title, cn.title) AS contentTitle,
+            COALESCE(g.cover, cn.cover) AS contentCover,
+            i.create_time AS createTime,
+            FALSE AS isRead
+        FROM interaction i
+        LEFT JOIN user u ON i.user_id = u.id
+        LEFT JOIN gourmet g ON i.content_id = g.id AND i.content_type = 'gourmet'
+        LEFT JOIN content_net cn ON i.content_id = cn.id AND i.content_type = 'content_net'
+        WHERE i.type = #{type}
+          AND i.user_id != #{userId}
+          AND (
+              EXISTS (
+                  SELECT 1 FROM gourmet g2
+                  WHERE g2.id = i.content_id
+                    AND g2.user_id = #{userId}
+                    AND i.content_type = 'gourmet'
+              )
+              OR
+              EXISTS (
+                  SELECT 1 FROM content_net cn2
+                  WHERE cn2.id = i.content_id
+                    AND cn2.user_id = #{userId}
+                    AND i.content_type = 'content_net'
+              )
+          )
+        ORDER BY i.create_time DESC
+        <if test="offset != null and size != null">
+            LIMIT #{offset}, #{size}
+        </if>
+    </select>
 
 </mapper>

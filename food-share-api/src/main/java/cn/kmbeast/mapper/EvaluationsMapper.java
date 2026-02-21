@@ -4,6 +4,7 @@ import cn.kmbeast.pojo.dto.query.extend.EvaluationsQueryDto;
 import cn.kmbeast.pojo.entity.Evaluations;
 import cn.kmbeast.pojo.vo.CommentChildVO;
 import cn.kmbeast.pojo.vo.CommentParentVO;
+import cn.kmbeast.pojo.vo.NotificationVO;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -28,7 +29,7 @@ public interface EvaluationsMapper {
      * 分页查询评论
      *
      * @param evaluationsQueryDto 参数
-     * @return List<CommentParentVO>
+     * @return List<CommentChildVO>
      */
     List<CommentChildVO> query(EvaluationsQueryDto evaluationsQueryDto);
 
@@ -85,5 +86,17 @@ public interface EvaluationsMapper {
      * @return 未读评论数量
      */
     Integer countUnreadComments(@Param(value = "userId") Integer userId);
+
+    /**
+     * 查询用户收到的评论消息列表
+     *
+     * @param userId 用户ID
+     * @param offset 偏移量
+     * @param size   数量
+     * @return 消息列表
+     */
+    List<NotificationVO> getCommentNotifications(@Param(value = "userId") Integer userId,
+                                                  @Param(value = "offset") Integer offset,
+                                                  @Param(value = "size") Integer size);
 
 }

@@ -194,4 +194,45 @@
           )
     </select>
 
+    <!-- 查询用户收到的评论消息列表 -->
+    <select id="getCommentNotifications" resultType="cn.kmbeast.pojo.vo.NotificationVO">
+        SELECT 
+            e.id,
+            e.user_id AS userId,
+            u.user_name AS userName,
+            u.user_avatar AS userAvatar,
+            'comment' AS type,
+            e.content AS content,
+            e.content_id AS contentId,
+            e.content_type AS contentType,
+            COALESCE(g.title, cn.title) AS contentTitle,
+            COALESCE(g.cover, cn.cover) AS contentCover,
+            e.create_time AS createTime,
+            FALSE AS isRead
+        FROM evaluations e
+        LEFT JOIN user u ON e.user_id = u.id
+        LEFT JOIN gourmet g ON e.content_id = g.id AND e.content_type = 'gourmet'
+        LEFT JOIN content_net cn ON e.content_id = cn.id AND e.content_type = 'content_net'
+        WHERE e.commenter_id != #{userId}
+          AND (
+              EXISTS (
+                  SELECT 1 FROM gourmet g2
+                  WHERE g2.id = e.content_id
+                    AND g2.user_id = #{userId}
+                    AND e.content_type = 'gourmet'
+              )
+              OR
+              EXISTS (
+                  SELECT 1 FROM content_net cn2
+                  WHERE cn2.id = e.content_id
+                    AND cn2.user_id = #{userId}
+                    AND e.content_type = 'content_net'
+              )
+          )
+        ORDER BY e.create_time DESC
+        <if test="offset != null and size != null">
+            LIMIT #{offset}, #{size}
+        </if>
+    </select>
+
 </mapper>

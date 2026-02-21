@@ -82,11 +82,14 @@ export default {
             likeCount: 0,
             followCount: 0,
             systemCount: 0,
-            messageList: []
+            messageList: [],
+            defaultAvatar: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iI0ZGNkIzNSIvPjxjaXJjbGUgY3g9IjUwIiBjeT0iMzgiIHI9IjE4IiBmaWxsPSIjZmZmIi8+PGVsbGlwc2UgY3g9IjUwIiBjeT0iODUiIHJ4PSIyNSIgcnk9IjIwIiBmaWxsPSIjZmZmIi8+PC9zdmc+',
+            defaultCover: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2ZmZjVmMCIvPjxjaXJjbGUgY3g9IjIwMCIgY3k9IjE1MCIgcj0iNjAiIGZpbGw9IiNmZjZiMzUiIG9wYWNpdHk9IjAuMyIvPjx0ZXh0IHg9IjIwMCIgeT0iMTUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjI0IiBmaWxsPSIjZmY2YjM1IiBvcGFjaXR5PSIwLjYiPuObluWutDwvdGV4dD48L3N2Zz4='
         }
     },
     mounted() {
         this.getUnreadCount();
+        this.loadMessages('comment');
     },
     methods: {
         goBack() {
@@ -115,17 +118,69 @@ export default {
         loadMessages(tab) {
             this.messageList = [];
             if (tab === 'comment') {
-                this.commentCount = 0;
+                this.$axios.get('/notification/comments').then(res => {
+                    const { data } = res;
+                    if (data.code === 200) {
+                        this.messageList = (data.data || []).map(item => ({
+                            id: item.id,
+                            avatar: item.userAvatar || this.defaultAvatar,
+                            name: item.userName || '匿名用户',
+                            time: this.formatTime(item.createTime),
+                            text: item.content || '评论了你的内容',
+                            preview: item.contentCover || this.defaultCover,
+                            contentId: item.contentId,
+                            contentType: item.contentType
+                        }));
+                        this.commentCount = 0;
+                    }
+                }).catch(err => {
+                    console.log('获取评论消息失败', err);
+                });
             } else if (tab === 'like') {
-                this.likeCount = 0;
+                this.$axios.get('/notification/likes').then(res => {
+                    const { data } = res;
+                    if (data.code === 200) {
+                        this.messageList = (data.data || []).map(item => ({
+                            id: item.id,
+                            avatar: item.userAvatar || this.defaultAvatar,
+                            name: item.userName || '匿名用户',
+                            time: this.formatTime(item.createTime),
+                            text: '赞了你的「' + (item.contentTitle || '内容') + '」',
+                            preview: item.contentCover || this.defaultCover,
+                            contentId: item.contentId,
+                            contentType: item.contentType
+                        }));
+                        this.likeCount = 0;
+                    }
+                }).catch(err => {
+                    console.log('获取点赞消息失败', err);
+                });
             } else if (tab === 'follow') {
                 this.followCount = 0;
             } else if (tab === 'system') {
                 this.systemCount = 0;
             }
         },
+        formatTime(timeStr) {
+            if (!timeStr) return '';
+            const date = new Date(timeStr);
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            
+            if (minutes < 1) return '刚刚';
+            if (minutes < 60) return minutes + '分钟前';
+            if (hours < 24) return hours + '小时前';
+            if (days < 7) return days + '天前';
+            return timeStr.substring(0, 10);
+        },
         readMessage(msg) {
-            console.log('Read message:', msg);
+            if (msg.contentId && msg.contentType === 'gourmet') {
+                sessionStorage.setItem('gourmetId', msg.contentId);
+                this.$router.push('/gourmetDetail');
+            }
         }
     }
 };

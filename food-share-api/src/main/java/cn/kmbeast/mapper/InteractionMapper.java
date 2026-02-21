@@ -5,6 +5,7 @@ import cn.kmbeast.pojo.dto.query.extend.InteractionStaticQueryDto;
 import cn.kmbeast.pojo.dto.query.extend.UserBehaviorWeightDto;
 import cn.kmbeast.pojo.entity.Interaction;
 import cn.kmbeast.pojo.vo.InteractionVO;
+import cn.kmbeast.pojo.vo.NotificationVO;
 import cn.kmbeast.pojo.vo.WhoLikedMeVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -22,8 +23,8 @@ public interface InteractionMapper {
     void batchDelete(@Param(value = "ids") List<Integer> ids);
 
     void delByUserInfo(@Param(value = "type") Integer type,
-                       @Param(value = "contentId") Integer contentId,
-                       @Param(value = "userId") Integer userId);
+            @Param(value = "contentId") Integer contentId,
+            @Param(value = "userId") Integer userId);
 
     List<InteractionVO> query(InteractionQueryDto interactionQueryDto);
 
@@ -32,7 +33,7 @@ public interface InteractionMapper {
     Integer queryCount(InteractionQueryDto interactionQueryDto);
 
     Integer queryByGourmetIds(@Param(value = "gourmetIds") List<Integer> gourmetIds,
-                           @Param(value = "type") Integer type);
+            @Param(value = "type") Integer type);
 
     /**
      * 查询用户的未读点赞数量
@@ -42,7 +43,7 @@ public interface InteractionMapper {
      * @return 未读点赞数量
      */
     Integer countUnreadLikes(@Param(value = "userId") Integer userId,
-                           @Param(value = "type") Integer type);
+            @Param(value = "type") Integer type);
 
     List<WhoLikedMeVO> queryWhoLikedMe(InteractionQueryDto interactionQueryDto);
 
@@ -51,15 +52,31 @@ public interface InteractionMapper {
     /**
      * 查询所有用户的综合行为数据
      * 用于基于用户行为的推荐算法
+     * 
      * @return 用户行为权重列表
      */
     List<UserBehaviorWeightDto> queryUserBehaviorWeights();
 
     /**
      * 查询指定用户的综合行为数据
+     * 
      * @param userId 用户ID
      * @return 用户行为权重列表
      */
     List<UserBehaviorWeightDto> queryUserBehaviorByUserId(@Param(value = "userId") Integer userId);
+
+    /**
+     * 查询用户收到的点赞消息列表
+     *
+     * @param userId 用户ID
+     * @param type   互动类型（1=点赞）
+     * @param offset 偏移量
+     * @param size   数量
+     * @return 消息列表
+     */
+    List<NotificationVO> getLikeNotifications(@Param(value = "userId") Integer userId,
+            @Param(value = "type") Integer type,
+            @Param(value = "offset") Integer offset,
+            @Param(value = "size") Integer size);
 
 }
