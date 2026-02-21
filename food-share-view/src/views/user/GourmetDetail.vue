@@ -197,7 +197,7 @@ export default {
             const { userName, userAvatar, userId } = getUserInfo();
             this.userName = userName || '游客';
             this.userAvatar = userAvatar || this.defaultAvatar;
-            this.userId = userId;
+            this.userId = userId ? Number(userId) : null;
         },
         // 检查屏幕宽度，控制推荐显示
         checkScreenWidth() {
@@ -237,7 +237,7 @@ export default {
                     this.commentCount = result.count || 0;
                     this.comments = (result.data || []).map(item => ({
                         id: item.id,
-                        userId: item.userId,
+                        userId: Number(item.userId),
                         avatar: item.userAvatar || this.defaultAvatar,
                         author: item.userName || '匿名用户',
                         text: item.content,
@@ -248,7 +248,7 @@ export default {
                         replyContent: '',
                         children: (item.commentChildVOS || []).map(child => ({
                             id: child.id,
-                            userId: child.userId,
+                            userId: Number(child.userId),
                             parentId: child.parentId,
                             userAvatar: child.userAvatar,
                             userName: child.userName,
