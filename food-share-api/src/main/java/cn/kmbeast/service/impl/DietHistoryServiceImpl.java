@@ -148,7 +148,7 @@ public class DietHistoryServiceImpl implements DietHistoryService {
      * @return List<DietNutrimentVO>
      */
     private List<DietNutrimentVO> parseNutriment(List<DietHistoryVO> historyVOS,
-                                                 DietQueryDto dietQueryDto) {
+            DietQueryDto dietQueryDto) {
         List<DietNutrimentVO> dietNutrimentVOS = new ArrayList<>();
         for (DietHistoryVO historyVO : historyVOS) {
             if (!StringUtils.hasText(historyVO.getNutrimentName())) {
@@ -172,13 +172,14 @@ public class DietHistoryServiceImpl implements DietHistoryService {
                 .collect(Collectors.toMap(
                         Function.identity(), // 使用DietNutrimentVO对象自身作为键
                         DietNutrimentVO::getValue, // 获取value作为初始值
-                        Integer::sum // 累加value
+                        (v1, v2) -> Integer.sum(v1 != null ? v1 : 0, v2 != null ? v2 : 0) // 累加value，处理null值
                 ));
         // 由于DietNutrimentVO是不可变的，并且我们重写了equals和hashCode，
         // 中间Map的键实际上是唯一的DietNutrimentVO对象，其value字段已经被累加。
         // 由Map转回List
         return intermediateMap.entrySet().stream()
-                .map(entry -> new DietNutrimentVO(entry.getKey().getNutrimentId(), entry.getKey().getNutrimentName(), entry.getValue(), entry.getKey().getTime()))
+                .map(entry -> new DietNutrimentVO(entry.getKey().getNutrimentId(), entry.getKey().getNutrimentName(),
+                        entry.getValue(), entry.getKey().getTime()))
                 .collect(Collectors.toList());
     }
 
@@ -209,13 +210,12 @@ public class DietHistoryServiceImpl implements DietHistoryService {
      * @param dietQueryDto     接收查询条件
      */
     private void selectedNutrimentList(List<DietNutrimentVO> dietNutrimentVOS,
-                                       DietQueryDto dietQueryDto) {
+            DietQueryDto dietQueryDto) {
         if (dietQueryDto.getNutrimentId() != null) {
             List<DietNutrimentVO> nutrimentVOS = dietNutrimentVOS.stream()
                     .filter(dietNutrimentVO -> Objects.equals(
                             dietNutrimentVO.getNutrimentId(),
-                            dietQueryDto.getNutrimentId()
-                    ))
+                            dietQueryDto.getNutrimentId()))
                     .collect(Collectors.toList());
             dietNutrimentVOS.clear();
             dietNutrimentVOS.addAll(nutrimentVOS);
@@ -234,41 +234,40 @@ public class DietHistoryServiceImpl implements DietHistoryService {
         if (dietHistories == null || dietHistories.isEmpty()) {
             return ApiResult.success(new ArrayList<>());
         }
-        
+
         List<Integer> cookbookIds = dietHistories.stream()
                 .map(TempDietQueryDto.TempDietItem::getCookbookId)
                 .distinct()
                 .collect(Collectors.toList());
-        
+
         List<CookbookNutrimentVO> nutrimentList = cookbookNutrimentMapper.queryByCookbookIds(cookbookIds);
-        
+
         Map<Integer, String> cookbookValueMap = dietHistories.stream()
                 .collect(Collectors.toMap(
                         TempDietQueryDto.TempDietItem::getCookbookId,
                         TempDietQueryDto.TempDietItem::getValue,
-                        (v1, v2) -> v1
-                ));
-        
+                        (v1, v2) -> v1));
+
         Map<Integer, NutritionSummaryVO> nutritionMap = new HashMap<>();
-        
+
         for (CookbookNutrimentVO nutriment : nutrimentList) {
             Integer cookbookId = nutriment.getCookbookId();
             String valueStr = cookbookValueMap.get(cookbookId);
             if (!StringUtils.hasText(valueStr)) {
                 continue;
             }
-            
+
             double inputValue = Double.parseDouble(valueStr);
             String g100Value = nutriment.getG100Value();
             if (!StringUtils.hasText(g100Value)) {
                 continue;
             }
-            
+
             double calculatedValue = (inputValue / 100) * Double.parseDouble(g100Value);
-            
+
             Integer nutrimentId = nutriment.getNutrimentId();
             NutritionSummaryVO existing = nutritionMap.get(nutrimentId);
-            
+
             if (existing != null) {
                 existing.setValue(existing.getValue() + calculatedValue);
             } else {
@@ -281,10 +280,10 @@ public class DietHistoryServiceImpl implements DietHistoryService {
                 nutritionMap.put(nutrimentId, summaryVO);
             }
         }
-        
+
         List<NutritionSummaryVO> result = new ArrayList<>(nutritionMap.values());
         result.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
-        
+
         return ApiResult.success(result);
     }
 

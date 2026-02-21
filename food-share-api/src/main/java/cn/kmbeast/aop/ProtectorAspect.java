@@ -34,6 +34,9 @@ public class ProtectorAspect {
     @Around("@annotation(cn.kmbeast.aop.Protector)")
     public Object auth(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return ApiResult.error("身份认证失败，请先登录");
+        }
         HttpServletRequest request = attributes.getRequest();
         String token = request.getHeader("token");
         if (token == null) {
@@ -66,6 +69,5 @@ public class ProtectorAspect {
         LocalThreadHolder.clear();
         return result;
     }
-
 
 }

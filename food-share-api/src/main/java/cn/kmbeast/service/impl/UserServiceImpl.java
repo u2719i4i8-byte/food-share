@@ -65,14 +65,12 @@ public class UserServiceImpl implements UserService {
     @Override
     public Result<String> register(UserRegisterDTO userRegisterDTO) {
         User user = userMapper.getByActive(
-                User.builder().userName(userRegisterDTO.getUserName()).build()
-        );
+                User.builder().userName(userRegisterDTO.getUserName()).build());
         if (Objects.nonNull(user)) {
             return ApiResult.error("用户名已经被使用，请换一个");
         }
         User entity = userMapper.getByActive(
-                User.builder().userAccount(userRegisterDTO.getUserAccount()).build()
-        );
+                User.builder().userAccount(userRegisterDTO.getUserAccount()).build());
         if (Objects.nonNull(entity)) {
             return ApiResult.error("账号不可用");
         }
@@ -99,8 +97,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public Result<Object> login(UserLoginDTO userLoginDTO) {
         User user = userMapper.getByActive(
-                User.builder().userAccount(userLoginDTO.getUserAccount()).build()
-        );
+                User.builder().userAccount(userLoginDTO.getUserAccount()).build());
         if (!Objects.nonNull(user)) {
             return ApiResult.error("账号不存在");
         }
@@ -114,11 +111,11 @@ public class UserServiceImpl implements UserService {
         Map<String, Object> map = new HashMap<>();
         map.put("token", token);
         map.put("role", user.getUserRole());
-        
+
         UserVO userVO = new UserVO();
         BeanUtils.copyProperties(user, userVO);
         map.put("userInfo", userVO);
-        
+
         return ApiResult.success("登录成功", map);
     }
 
@@ -132,6 +129,9 @@ public class UserServiceImpl implements UserService {
         Integer userId = LocalThreadHolder.getUserId();
         User queryEntity = User.builder().id(userId).build();
         User user = userMapper.getByActive(queryEntity);
+        if (user == null) {
+            return ApiResult.error("用户信息不存在，请重新登录");
+        }
         UserVO userVO = new UserVO();
         BeanUtils.copyProperties(user, userVO);
         return ApiResult.success(userVO);
@@ -142,22 +142,22 @@ public class UserServiceImpl implements UserService {
         Integer userId = LocalThreadHolder.getUserId();
         User queryEntity = User.builder().id(userId).build();
         User user = userMapper.getByActive(queryEntity);
-        
+
         if (user == null) {
             return ApiResult.error("用户信息不存在，请重新登录");
         }
-        
+
         String defaultAvatar = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iI0ZGNkIzNSIvPjxjaXJjbGUgY3g9IjUwIiBjeT0iMzgiIHI9IjE4IiBmaWxsPSIjZmZmIi8+PGVsbGlwc2UgY3g9IjUwIiBjeT0iODUiIHJ4PSIyNSIgcnk9IjIwIiBmaWxsPSIjZmZmIi8+PC9zdmc+";
-        
+
         CurrentUserVO currentUserVO = new CurrentUserVO();
         currentUserVO.setUserId(user.getId());
-        currentUserVO.setAvatarUrl(user.getUserAvatar() != null && !user.getUserAvatar().isEmpty() 
-            ? user.getUserAvatar() 
-            : defaultAvatar);
-        currentUserVO.setNickname(user.getUserName() != null && !user.getUserName().isEmpty() 
-            ? user.getUserName() 
-            : user.getUserAccount());
-        
+        currentUserVO.setAvatarUrl(user.getUserAvatar() != null && !user.getUserAvatar().isEmpty()
+                ? user.getUserAvatar()
+                : defaultAvatar);
+        currentUserVO.setNickname(user.getUserName() != null && !user.getUserName().isEmpty()
+                ? user.getUserName()
+                : user.getUserAccount());
+
         return ApiResult.success(currentUserVO);
     }
 
@@ -175,19 +175,21 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * 用户信息修改
+     * 修改用户信息
      *
      * @param userUpdateDTO 修改信息入参
      * @return Result<String> 响应结果
      */
     @Override
     public Result<String> update(UserUpdateDTO userUpdateDTO) {
+        if (userUpdateDTO == null) {
+            return ApiResult.error("更新信息不能为空");
+        }
         User updateEntity = User.builder().id(LocalThreadHolder.getUserId()).build();
         BeanUtils.copyProperties(userUpdateDTO, updateEntity);
         userMapper.update(updateEntity);
         return ApiResult.success();
     }
-
 
     /**
      * 批量删除用户信息
@@ -210,8 +212,7 @@ public class UserServiceImpl implements UserService {
         String newPwd = map.get("newPwd");
         String againPwd = map.get("againPwd");
         User user = userMapper.getByActive(
-                User.builder().id(LocalThreadHolder.getUserId()).build()
-        );
+                User.builder().id(LocalThreadHolder.getUserId()).build());
         if (!user.getUserPwd().equals(oldPwd)) {
             return ApiResult.error("原始密码验证失败");
         }
@@ -231,6 +232,9 @@ public class UserServiceImpl implements UserService {
     @Override
     public Result<UserVO> getById(Integer id) {
         User user = userMapper.getByActive(User.builder().id(id).build());
+        if (user == null) {
+            return ApiResult.error("用户不存在");
+        }
         UserVO userVO = new UserVO();
         BeanUtils.copyProperties(user, userVO);
         return ApiResult.success(userVO);
@@ -255,6 +259,9 @@ public class UserServiceImpl implements UserService {
      */
     @Override
     public Result<String> backUpdate(User user) {
+        if (user == null) {
+            return ApiResult.error("用户信息不能为空");
+        }
         userMapper.update(user);
         return ApiResult.success();
     }
@@ -290,7 +297,7 @@ public class UserServiceImpl implements UserService {
                 .map(GourmetVO::getId)
                 .collect(Collectors.toList());
         centerVOS.setPublishCount(gourmetVOS.size());
-        if (gourmetIds.isEmpty()){
+        if (gourmetIds.isEmpty()) {
             centerVOS.setSaveCount(0);
             centerVOS.setUpvoteCount(0);
             centerVOS.setViewCount(0);
@@ -298,16 +305,13 @@ public class UserServiceImpl implements UserService {
         }
         Integer viewCount = interactionMapper.queryByGourmetIds(
                 gourmetIds,
-                InteractionTypeEnum.VIEW.getType()
-        );
+                InteractionTypeEnum.VIEW.getType());
         Integer upvoteCount = interactionMapper.queryByGourmetIds(
                 gourmetIds,
-                InteractionTypeEnum.UPVOTE.getType()
-        );
+                InteractionTypeEnum.UPVOTE.getType());
         Integer saveCount = interactionMapper.queryByGourmetIds(
                 gourmetIds,
-                InteractionTypeEnum.COLLECTION.getType()
-        );
+                InteractionTypeEnum.COLLECTION.getType());
         centerVOS.setSaveCount(saveCount);
         centerVOS.setViewCount(viewCount);
         centerVOS.setUpvoteCount(upvoteCount);

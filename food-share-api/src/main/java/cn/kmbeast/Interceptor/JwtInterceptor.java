@@ -6,6 +6,7 @@ import cn.kmbeast.pojo.api.Result;
 import cn.kmbeast.utils.JwtUtil;
 import com.alibaba.fastjson2.JSONObject;
 import io.jsonwebtoken.Claims;
+import org.springframework.lang.NonNull;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import javax.servlet.http.HttpServletRequest;
@@ -30,7 +31,7 @@ public class JwtInterceptor implements HandlerInterceptor {
      * @throws Exception 异常
      */
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+    public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler) throws Exception {
         String requestMethod = request.getMethod();
         // 放行预检请求
         if ("OPTIONS".equals(requestMethod)) {

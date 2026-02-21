@@ -151,8 +151,9 @@ public class RecommendServiceImpl implements RecommendService {
         // 分析用户偏好的分类（按综合得分排序）
         Map<Integer, Double> categoryScores = new HashMap<>();
         for (UserBehaviorWeightDto behavior : userBehaviors) {
-            if (behavior.getCategoryId() != null) {
-                categoryScores.merge(behavior.getCategoryId(), behavior.getScore(), Double::sum);
+            if (behavior.getCategoryId() != null && behavior.getScore() != null) {
+                categoryScores.merge(behavior.getCategoryId(), behavior.getScore(), 
+                        (v1, v2) -> Double.sum(v1 != null ? v1 : 0.0, v2 != null ? v2 : 0.0));
             }
         }
 

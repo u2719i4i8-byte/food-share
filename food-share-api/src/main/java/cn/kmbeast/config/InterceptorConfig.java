@@ -3,6 +3,7 @@ package cn.kmbeast.config;
 import cn.kmbeast.Interceptor.JwtInterceptor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.lang.NonNull;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -16,7 +17,7 @@ public class InterceptorConfig implements WebMvcConfigurer {
     private String API;
 
     @Override
-    public void addInterceptors(InterceptorRegistry registry) {
+    public void addInterceptors(@NonNull InterceptorRegistry registry) {
         // 拦截器注册
         registry.addInterceptor(new JwtInterceptor())
                 .addPathPatterns("/**")
