@@ -385,7 +385,7 @@ export default {
             const tagIndex = this.currentTags[groupIndex];
             return this.categoryGroups[groupIndex].tags[tagIndex];
         },
-        // 获取美食列表数据
+        // 获取美食列表数据（使用智能推荐算法）
         fetchGourmets() {
             if (this.loading || !this.hasMore) return;
             
@@ -402,69 +402,76 @@ export default {
             
             this.loading = true;
             
-            // 推荐标签：获取当前分类组下所有分类的随机美食
+            // 构建分类ID参数
+            let categoryIdsParam = '';
             if (tagName === '推荐') {
                 const groupIndex = this.currentGroupIndex;
                 const groupTags = this.categoryGroups[groupIndex].tags.filter(t => t !== '推荐');
                 const categoryIds = groupTags.map(tag => this.categoryNameMap[tag]).filter(id => id);
-                
-                const queryDto = {
-                    current: this.current,
-                    size: this.size,
-                    isAudit: true,
-                    isPublish: true,
-                    orderBy: 'random'
-                };
-                
+                categoryIdsParam = categoryIds.join(',');
+            } else {
+                const categoryId = this.categoryNameMap[tagName];
+                if (categoryId) {
+                    categoryIdsParam = String(categoryId);
+                }
+            }
+            
+            // 使用推荐API获取数据
+            const url = `/recommend/category/${this.size}?categoryIds=${categoryIdsParam}`;
+            this.$axios.get(url).then(res => {
+                const { data } = res;
+                if (data.code === 200) {
+                    const list = data.data || [];
+                    if (list.length < this.size) {
+                        this.hasMore = false;
+                    }
+                    this.gourmetList = [...this.gourmetList, ...list];
+                    this.current++;
+                }
+            }).catch(error => {
+                console.log('推荐获取失败，尝试普通查询', error);
+                this.fetchGourmetsFallback(tagName);
+            }).finally(() => {
+                this.loading = false;
+            });
+        },
+        // 推荐失败时的降级查询
+        fetchGourmetsFallback(tagName) {
+            const queryDto = {
+                current: this.current,
+                size: this.size,
+                isAudit: true,
+                isPublish: true,
+                orderBy: 'random'
+            };
+            
+            if (tagName === '推荐') {
+                const groupIndex = this.currentGroupIndex;
+                const groupTags = this.categoryGroups[groupIndex].tags.filter(t => t !== '推荐');
+                const categoryIds = groupTags.map(tag => this.categoryNameMap[tag]).filter(id => id);
                 if (categoryIds.length > 0) {
                     queryDto.categoryIds = categoryIds;
                 }
-                
-                this.$axios.post('/gourmet/queryList', queryDto).then(res => {
-                    const { data } = res;
-                    if (data.code === 200) {
-                        const list = res.data.data || [];
-                        if (list.length < this.size) {
-                            this.hasMore = false;
-                        }
-                        this.gourmetList = [...this.gourmetList, ...list];
-                        this.current++;
-                    }
-                }).catch(error => {
-                    console.log(error);
-                }).finally(() => {
-                    this.loading = false;
-                });
             } else {
-                // 普通分类标签：获取该分类下的美食
-                const queryDto = {
-                    current: this.current,
-                    size: this.size,
-                    isAudit: true,
-                    isPublish: true
-                };
-                
                 const categoryId = this.categoryNameMap[tagName];
                 if (categoryId) {
                     queryDto.categoryId = categoryId;
                 }
-                
-                this.$axios.post('/gourmet/queryList', queryDto).then(res => {
-                    const { data } = res;
-                    if (data.code === 200) {
-                        const list = res.data.data || [];
-                        if (list.length < this.size) {
-                            this.hasMore = false;
-                        }
-                        this.gourmetList = [...this.gourmetList, ...list];
-                        this.current++;
-                    }
-                }).catch(error => {
-                    console.log(error);
-                }).finally(() => {
-                    this.loading = false;
-                });
             }
+            
+            this.$axios.post('/gourmet/queryList', queryDto).then(res => {
+                const { data } = res;
+                if (data.code === 200) {
+                    const list = res.data.data || [];
+                    if (list.length < this.size) {
+                        this.hasMore = false;
+                    }
+                    this.gourmetList = [...this.gourmetList, ...list];
+                    this.current++;
+                }
+            }).catch(error => {
+                console.log(error);
+            });
         },
         // 查看美食详情
         readGourmet(gourmet) {

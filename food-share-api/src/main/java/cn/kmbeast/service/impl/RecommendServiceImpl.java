@@ -98,16 +98,14 @@ public class RecommendServiceImpl implements RecommendService {
                     .map(bw -> new RatingDto(
                             bw.getUserId(),
                             bw.getContentId(),
-                            bw.getScore().floatValue()
-                    ))
+                            bw.getScore().floatValue()))
                     .collect(Collectors.toList());
 
             // 使用Mahout进行协同过滤推荐
             List<RecommendedItem> recommenderList = MahoutUtils.recommender(
                     ratingDtoList,
                     userId.longValue(),
-                    item
-            );
+                    item);
 
             if (CollectionUtils.isEmpty(recommenderList)) {
                 log.info("协同过滤未生成推荐结果");
@@ -152,7 +150,7 @@ public class RecommendServiceImpl implements RecommendService {
         Map<Integer, Double> categoryScores = new HashMap<>();
         for (UserBehaviorWeightDto behavior : userBehaviors) {
             if (behavior.getCategoryId() != null && behavior.getScore() != null) {
-                categoryScores.merge(behavior.getCategoryId(), behavior.getScore(), 
+                categoryScores.merge(behavior.getCategoryId(), behavior.getScore(),
                         (v1, v2) -> Double.sum(v1 != null ? v1 : 0.0, v2 != null ? v2 : 0.0));
             }
         }
@@ -221,11 +219,11 @@ public class RecommendServiceImpl implements RecommendService {
         // 按热度排序（浏览量 + 点赞数×10 + 收藏数×15）
         List<GourmetVO> sortedGourmets = allGourmets.stream()
                 .sorted((g1, g2) -> {
-                    int hotScore1 = (g1.getViewCount() != null ? g1.getViewCount() : 0) 
-                            + (g1.getUpvoteCount() != null ? g1.getUpvoteCount() : 0) * 10 
+                    int hotScore1 = (g1.getViewCount() != null ? g1.getViewCount() : 0)
+                            + (g1.getUpvoteCount() != null ? g1.getUpvoteCount() : 0) * 10
                             + (g1.getSaveCount() != null ? g1.getSaveCount() : 0) * 15;
-                    int hotScore2 = (g2.getViewCount() != null ? g2.getViewCount() : 0) 
-                            + (g2.getUpvoteCount() != null ? g2.getUpvoteCount() : 0) * 10 
+                    int hotScore2 = (g2.getViewCount() != null ? g2.getViewCount() : 0)
+                            + (g2.getUpvoteCount() != null ? g2.getUpvoteCount() : 0) * 10
                             + (g2.getSaveCount() != null ? g2.getSaveCount() : 0) * 15;
                     return Integer.compare(hotScore2, hotScore1);
                 })
@@ -274,6 +272,194 @@ public class RecommendServiceImpl implements RecommendService {
         return gourmetIds.stream()
                 .filter(id -> !interactedIds.contains(id))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 获取分类推荐美食列表
+     * 基于用户行为和分类的智能推荐
+     *
+     * @param categoryIds 分类ID列表（可选）
+     * @param item        推荐数量
+     * @return 推荐美食列表
+     */
+    @Override
+    public Result<List<GourmetVO>> recommendByCategory(List<Integer> categoryIds, Integer item) {
+        Integer currentUserId = LocalThreadHolder.getUserId();
+        log.info("开始分类推荐，用户: {}, 分类: {}, 数量: {}", currentUserId, categoryIds, item);
+
+        // 策略1: 如果用户已登录且有行为数据，尝试协同过滤
+        if (currentUserId != null) {
+            List<GourmetVO> cfResults = getCategoryCFRecommendations(currentUserId, categoryIds, item);
+            if (!CollectionUtils.isEmpty(cfResults)) {
+                log.info("分类协同过滤推荐成功，返回 {} 条", cfResults.size());
+                return ApiResult.success(cfResults);
+            }
+
+            // 策略2: 基于用户偏好分类推荐
+            List<GourmetVO> preferenceResults = getCategoryPreferenceRecommendations(currentUserId, categoryIds, item);
+            if (!CollectionUtils.isEmpty(preferenceResults)) {
+                log.info("分类偏好推荐成功，返回 {} 条", preferenceResults.size());
+                return ApiResult.success(preferenceResults);
+            }
+        }
+
+        // 策略3: 分类热门推荐
+        List<GourmetVO> hotResults = getCategoryHotRecommendations(categoryIds, item);
+        if (!CollectionUtils.isEmpty(hotResults)) {
+            log.info("分类热门推荐成功，返回 {} 条", hotResults.size());
+            return ApiResult.success(hotResults);
+        }
+
+        // 策略4: 随机推荐（兜底）
+        List<GourmetVO> randomResults = getCategoryRandomRecommendations(categoryIds, item);
+        log.info("分类随机推荐，返回 {} 条", randomResults.size());
+        return ApiResult.success(randomResults);
+    }
+
+    /**
+     * 分类协同过滤推荐
+     */
+    private List<GourmetVO> getCategoryCFRecommendations(Integer userId, List<Integer> categoryIds, int item) {
+        try {
+            List<UserBehaviorWeightDto> behaviorWeights = interactionMapper.queryUserBehaviorWeights();
+            if (CollectionUtils.isEmpty(behaviorWeights)) {
+                return Collections.emptyList();
+            }
+
+            List<RatingDto> ratingDtoList = behaviorWeights.stream()
+                    .map(bw -> new RatingDto(bw.getUserId(), bw.getContentId(), bw.getScore().floatValue()))
+                    .collect(Collectors.toList());
+
+            List<RecommendedItem> recommenderList = MahoutUtils.recommender(ratingDtoList, userId.longValue(),
+                    item * 2);
+            if (CollectionUtils.isEmpty(recommenderList)) {
+                return Collections.emptyList();
+            }
+
+            List<Integer> gourmetIds = recommenderList.stream()
+                    .map(r -> Integer.parseInt(String.valueOf(r.getItemID())))
+                    .collect(Collectors.toList());
+
+            List<Integer> filteredIds = filterUserInteracted(gourmetIds, userId);
+            if (CollectionUtils.isEmpty(filteredIds)) {
+                return Collections.emptyList();
+            }
+
+            List<GourmetVO> gourmets = gourmetMapper.queryByIds(filteredIds);
+
+            // 如果指定了分类，过滤分类
+            if (!CollectionUtils.isEmpty(categoryIds)) {
+                gourmets = gourmets.stream()
+                        .filter(g -> categoryIds.contains(g.getCategoryId()))
+                        .collect(Collectors.toList());
+            }
+
+            if (gourmets.size() > item) {
+                return gourmets.subList(0, item);
+            }
+            return gourmets;
+        } catch (Exception e) {
+            log.error("分类协同过滤异常: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 分类偏好推荐
+     */
+    private List<GourmetVO> getCategoryPreferenceRecommendations(Integer userId, List<Integer> categoryIds, int item) {
+        List<UserBehaviorWeightDto> userBehaviors = interactionMapper.queryUserBehaviorByUserId(userId);
+        if (CollectionUtils.isEmpty(userBehaviors)) {
+            return Collections.emptyList();
+        }
+
+        Set<Integer> interactedIds = userBehaviors.stream()
+                .map(UserBehaviorWeightDto::getContentId)
+                .collect(Collectors.toSet());
+
+        GourmetQueryDto queryDto = new GourmetQueryDto();
+        queryDto.setIsAudit(true);
+        queryDto.setIsPublish(true);
+        queryDto.setOrderBy("random");
+
+        if (!CollectionUtils.isEmpty(categoryIds)) {
+            queryDto.setCategoryIds(categoryIds);
+        }
+
+        List<GourmetVO> gourmets = gourmetMapper.query(queryDto);
+
+        // 过滤已交互的内容
+        List<GourmetVO> filtered = gourmets.stream()
+                .filter(g -> !interactedIds.contains(g.getId()))
+                .collect(Collectors.toList());
+
+        Collections.shuffle(filtered);
+
+        if (filtered.size() > item) {
+            return filtered.subList(0, item);
+        }
+        return filtered;
+    }
+
+    /**
+     * 分类热门推荐
+     */
+    private List<GourmetVO> getCategoryHotRecommendations(List<Integer> categoryIds, int item) {
+        GourmetQueryDto queryDto = new GourmetQueryDto();
+        queryDto.setIsAudit(true);
+        queryDto.setIsPublish(true);
+
+        if (!CollectionUtils.isEmpty(categoryIds)) {
+            queryDto.setCategoryIds(categoryIds);
+        }
+
+        List<GourmetVO> gourmets = gourmetMapper.query(queryDto);
+        if (CollectionUtils.isEmpty(gourmets)) {
+            return Collections.emptyList();
+        }
+
+        // 按热度排序
+        List<GourmetVO> sorted = gourmets.stream()
+                .sorted((g1, g2) -> {
+                    int score1 = (g1.getViewCount() != null ? g1.getViewCount() : 0)
+                            + (g1.getUpvoteCount() != null ? g1.getUpvoteCount() : 0) * 10
+                            + (g1.getSaveCount() != null ? g1.getSaveCount() : 0) * 15;
+                    int score2 = (g2.getViewCount() != null ? g2.getViewCount() : 0)
+                            + (g2.getUpvoteCount() != null ? g2.getUpvoteCount() : 0) * 10
+                            + (g2.getSaveCount() != null ? g2.getSaveCount() : 0) * 15;
+                    return Integer.compare(score2, score1);
+                })
+                .collect(Collectors.toList());
+
+        if (sorted.size() > item) {
+            return sorted.subList(0, item);
+        }
+        return sorted;
+    }
+
+    /**
+     * 分类随机推荐
+     */
+    private List<GourmetVO> getCategoryRandomRecommendations(List<Integer> categoryIds, int item) {
+        GourmetQueryDto queryDto = new GourmetQueryDto();
+        queryDto.setIsAudit(true);
+        queryDto.setIsPublish(true);
+        queryDto.setOrderBy("random");
+
+        if (!CollectionUtils.isEmpty(categoryIds)) {
+            queryDto.setCategoryIds(categoryIds);
+        }
+
+        List<GourmetVO> gourmets = gourmetMapper.query(queryDto);
+        if (CollectionUtils.isEmpty(gourmets)) {
+            return Collections.emptyList();
+        }
+
+        Collections.shuffle(gourmets);
+        if (gourmets.size() > item) {
+            return gourmets.subList(0, item);
+        }
+        return gourmets;
     }
 
 }
