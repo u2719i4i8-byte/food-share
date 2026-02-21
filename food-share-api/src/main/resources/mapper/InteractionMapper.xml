@@ -203,8 +203,7 @@
 
     <!-- 谁给我点赞的映射结果 -->
     <resultMap id="WhoLikedMeResultMap" type="cn.kmbeast.pojo.vo.WhoLikedMeVO">
-        <id column="id" property="id"/>
-        <result column="user_id" property="userId"/>
+        <id column="user_id" property="userId"/>
         <result column="content_id" property="contentId"/>
         <result column="content_type" property="contentType"/>
         <result column="create_time" property="createTime"/>
@@ -213,6 +212,100 @@
         <result column="content_title" property="contentTitle"/>
         <result column="content_cover" property="contentCover"/>
     </resultMap>
+
+    <!-- 用户行为权重映射结果 -->
+    <resultMap id="UserBehaviorWeightResultMap" type="cn.kmbeast.pojo.dto.query.extend.UserBehaviorWeightDto">
+        <result column="user_id" property="userId"/>
+        <result column="content_id" property="contentId"/>
+        <result column="score" property="score"/>
+        <result column="view_count" property="viewCount"/>
+        <result column="upvote_flag" property="upvoteFlag"/>
+        <result column="collect_flag" property="collectFlag"/>
+        <result column="rating_score" property="ratingScore"/>
+        <result column="category_id" property="categoryId"/>
+    </resultMap>
+
+    <!-- 查询所有用户的综合行为数据 -->
+    <select id="queryUserBehaviorWeights" resultMap="UserBehaviorWeightResultMap">
+        SELECT 
+            i.user_id,
+            i.content_id,
+            (
+                IFNULL(view_cnt.count, 0) * 0.1 +
+                IFNULL(upvote_flag.flag, 0) * 2 +
+                IFNULL(collect_flag.flag, 0) * 3 +
+                IFNULL(i.score, 0) * 2
+            ) AS score,
+            IFNULL(view_cnt.count, 0) AS view_count,
+            IFNULL(upvote_flag.flag, 0) AS upvote_flag,
+            IFNULL(collect_flag.flag, 0) AS collect_flag,
+            i.score AS rating_score,
+            g.category_id
+        FROM (
+            SELECT DISTINCT user_id, content_id, score
+            FROM interaction
+            WHERE content_type = 'gourmet'
+        ) i
+        LEFT JOIN gourmet g ON i.content_id = g.id
+        LEFT JOIN (
+            SELECT user_id, content_id, COUNT(*) AS count
+            FROM interaction
+            WHERE type = 3 AND content_type = 'gourmet'
+            GROUP BY user_id, content_id
+        ) view_cnt ON i.user_id = view_cnt.user_id AND i.content_id = view_cnt.content_id
+        LEFT JOIN (
+            SELECT user_id, content_id, 1 AS flag
+            FROM interaction
+            WHERE type = 1 AND content_type = 'gourmet'
+        ) upvote_flag ON i.user_id = upvote_flag.user_id AND i.content_id = upvote_flag.content_id
+        LEFT JOIN (
+            SELECT user_id, content_id, 1 AS flag
+            FROM interaction
+            WHERE type = 2 AND content_type = 'gourmet'
+        ) collect_flag ON i.user_id = collect_flag.user_id AND i.content_id = collect_flag.content_id
+        WHERE g.id IS NOT NULL
+    </select>
+
+    <!-- 查询指定用户的综合行为数据 -->
+    <select id="queryUserBehaviorByUserId" resultMap="UserBehaviorWeightResultMap">
+        SELECT 
+            i.user_id,
+            i.content_id,
+            (
+                IFNULL(view_cnt.count, 0) * 0.1 +
+                IFNULL(upvote_flag.flag, 0) * 2 +
+                IFNULL(collect_flag.flag, 0) * 3 +
+                IFNULL(i.score, 0) * 2
+            ) AS score,
+            IFNULL(view_cnt.count, 0) AS view_count,
+            IFNULL(upvote_flag.flag, 0) AS upvote_flag,
+            IFNULL(collect_flag.flag, 0) AS collect_flag,
+            i.score AS rating_score,
+            g.category_id
+        FROM (
+            SELECT DISTINCT user_id, content_id, score
+            FROM interaction
+            WHERE content_type = 'gourmet' AND user_id = #{userId}
+        ) i
+        LEFT JOIN gourmet g ON i.content_id = g.id
+        LEFT JOIN (
+            SELECT user_id, content_id, COUNT(*) AS count
+            FROM interaction
+            WHERE type = 3 AND content_type = 'gourmet' AND user_id = #{userId}
+            GROUP BY user_id, content_id
+        ) view_cnt ON i.user_id = view_cnt.user_id AND i.content_id = view_cnt.content_id
+        LEFT JOIN (
+            SELECT user_id, content_id, 1 AS flag
+            FROM interaction
+            WHERE type = 1 AND content_type = 'gourmet' AND user_id = #{userId}
+        ) upvote_flag ON i.user_id = upvote_flag.user_id AND i.content_id = upvote_flag.content_id
+        LEFT JOIN (
+            SELECT user_id, content_id, 1 AS flag
+            FROM interaction
+            WHERE type = 2 AND content_type = 'gourmet' AND user_id = #{userId}
+        ) collect_flag ON i.user_id = collect_flag.user_id AND i.content_id = collect_flag.content_id
+        WHERE g.id IS NOT NULL
+    </select>
 
 
 </mapper>

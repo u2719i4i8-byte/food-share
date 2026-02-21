@@ -1,33 +1,31 @@
 package cn.kmbeast.service.impl;
 
-
 import cn.kmbeast.context.LocalThreadHolder;
 import cn.kmbeast.mapper.GourmetMapper;
 import cn.kmbeast.mapper.InteractionMapper;
 import cn.kmbeast.pojo.api.ApiResult;
 import cn.kmbeast.pojo.api.Result;
 import cn.kmbeast.pojo.dto.query.extend.GourmetQueryDto;
-import cn.kmbeast.pojo.dto.query.extend.InteractionQueryDto;
 import cn.kmbeast.pojo.dto.query.extend.RatingDto;
-import cn.kmbeast.pojo.em.InteractionTypeEnum;
+import cn.kmbeast.pojo.dto.query.extend.UserBehaviorWeightDto;
 import cn.kmbeast.pojo.vo.GourmetVO;
-import cn.kmbeast.pojo.vo.InteractionVO;
 import cn.kmbeast.service.RecommendService;
 import cn.kmbeast.utils.MahoutUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
  * 推荐业务逻辑实现
+ * 基于用户行为的个性化推荐系统
  */
 @Service
+@Slf4j
 public class RecommendServiceImpl implements RecommendService {
 
     @Resource
@@ -35,55 +33,246 @@ public class RecommendServiceImpl implements RecommendService {
     @Resource
     private GourmetMapper gourmetMapper;
 
-
     /**
      * 查询需要推荐给用户的美食做法帖子数据
+     * 推荐策略：
+     * 1. 基于用户行为的协同过滤推荐（综合浏览、点赞、收藏、评分）
+     * 2. 如果协同过滤失败，基于用户偏好分类推荐
+     * 3. 如果无偏好分类，返回热门推荐
+     * 4. 兜底返回随机推荐
      *
      * @param item 需要的条数
      * @return Result<List < GourmetVO>>
      */
     @Override
     public Result<List<GourmetVO>> recommendGourmet(Integer item) {
-        // 1. 需要数据集(用户关于物品的评分数据)
-        InteractionQueryDto queryDto = new InteractionQueryDto();
-        queryDto.setType(InteractionTypeEnum.RATING.getType());
-        List<InteractionVO> interactionVOS = interactionMapper.query(queryDto);
-        List<RatingDto> ratingDtoList = interactionVOS.stream().map(interactionVO -> new RatingDto(
-                interactionVO.getUserId(),
-                interactionVO.getContentId(),
-                interactionVO.getScore()
-        )).collect(Collectors.toList());
-        List<RecommendedItem> recommenderList
-                = MahoutUtils.recommender(
-                ratingDtoList,
-                (long) LocalThreadHolder.getUserId(),
-                item
-        );
-        List<Long> gourmetIds = recommenderList.stream()
-                .map(RecommendedItem::getItemID)
+        Integer currentUserId = LocalThreadHolder.getUserId();
+        log.info("开始为用户 {} 生成推荐，推荐数量: {}", currentUserId, item);
+
+        // 策略1: 基于用户行为的协同过滤推荐
+        List<GourmetVO> cfRecommendations = getCollaborativeFilteringRecommendations(currentUserId, item);
+        if (!CollectionUtils.isEmpty(cfRecommendations)) {
+            log.info("协同过滤推荐成功，返回 {} 条推荐", cfRecommendations.size());
+            return ApiResult.success(cfRecommendations);
+        }
+
+        // 策略2: 基于用户偏好分类推荐
+        List<GourmetVO> categoryRecommendations = getCategoryBasedRecommendations(currentUserId, item);
+        if (!CollectionUtils.isEmpty(categoryRecommendations)) {
+            log.info("分类偏好推荐成功，返回 {} 条推荐", categoryRecommendations.size());
+            return ApiResult.success(categoryRecommendations);
+        }
+
+        // 策略3: 热门推荐
+        List<GourmetVO> hotRecommendations = getHotRecommendations(item);
+        if (!CollectionUtils.isEmpty(hotRecommendations)) {
+            log.info("热门推荐成功，返回 {} 条推荐", hotRecommendations.size());
+            return ApiResult.success(hotRecommendations);
+        }
+
+        // 策略4: 随机推荐（兜底）
+        List<GourmetVO> randomRecommendations = getRandomRecommendations(item);
+        log.info("随机推荐，返回 {} 条推荐", randomRecommendations.size());
+        return ApiResult.success(randomRecommendations);
+    }
+
+    /**
+     * 基于用户行为的协同过滤推荐
+     * 使用Mahout库实现基于用户的协同过滤算法
+     *
+     * @param userId 用户ID
+     * @param item   推荐数量
+     * @return 推荐美食列表
+     */
+    private List<GourmetVO> getCollaborativeFilteringRecommendations(Integer userId, int item) {
+        try {
+            // 获取所有用户的综合行为数据
+            List<UserBehaviorWeightDto> behaviorWeights = interactionMapper.queryUserBehaviorWeights();
+            if (CollectionUtils.isEmpty(behaviorWeights)) {
+                log.info("没有用户行为数据，跳过协同过滤");
+                return Collections.emptyList();
+            }
+
+            // 转换为评分数据格式
+            List<RatingDto> ratingDtoList = behaviorWeights.stream()
+                    .map(bw -> new RatingDto(
+                            bw.getUserId(),
+                            bw.getContentId(),
+                            bw.getScore().floatValue()
+                    ))
+                    .collect(Collectors.toList());
+
+            // 使用Mahout进行协同过滤推荐
+            List<RecommendedItem> recommenderList = MahoutUtils.recommender(
+                    ratingDtoList,
+                    userId.longValue(),
+                    item
+            );
+
+            if (CollectionUtils.isEmpty(recommenderList)) {
+                log.info("协同过滤未生成推荐结果");
+                return Collections.emptyList();
+            }
+
+            // 获取推荐的美食ID列表
+            List<Integer> gourmetIds = recommenderList.stream()
+                    .map(recommendedItem -> Integer.parseInt(String.valueOf(recommendedItem.getItemID())))
+                    .collect(Collectors.toList());
+
+            // 过滤掉用户已经交互过的内容
+            List<Integer> filteredIds = filterUserInteracted(gourmetIds, userId);
+            if (CollectionUtils.isEmpty(filteredIds)) {
+                return Collections.emptyList();
+            }
+
+            return gourmetMapper.queryByIds(filteredIds);
+        } catch (Exception e) {
+            log.error("协同过滤推荐异常: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 基于用户偏好分类的推荐
+     * 根据用户历史行为分析偏好分类，推荐该分类下的热门内容
+     *
+     * @param userId 用户ID
+     * @param item   推荐数量
+     * @return 推荐美食列表
+     */
+    private List<GourmetVO> getCategoryBasedRecommendations(Integer userId, int item) {
+        // 获取当前用户的行为数据
+        List<UserBehaviorWeightDto> userBehaviors = interactionMapper.queryUserBehaviorByUserId(userId);
+        if (CollectionUtils.isEmpty(userBehaviors)) {
+            log.info("用户 {} 没有行为数据", userId);
+            return Collections.emptyList();
+        }
+
+        // 分析用户偏好的分类（按综合得分排序）
+        Map<Integer, Double> categoryScores = new HashMap<>();
+        for (UserBehaviorWeightDto behavior : userBehaviors) {
+            if (behavior.getCategoryId() != null) {
+                categoryScores.merge(behavior.getCategoryId(), behavior.getScore(), Double::sum);
+            }
+        }
+
+        if (categoryScores.isEmpty()) {
+            log.info("用户 {} 没有偏好分类", userId);
+            return Collections.emptyList();
+        }
+
+        // 按得分排序获取偏好分类
+        List<Integer> preferredCategories = categoryScores.entrySet().stream()
+                .sorted(Map.Entry.<Integer, Double>comparingByValue().reversed())
+                .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
-        // 有三种情况： 1. 直接没有数据，算不出来；2. 算出来了
-        if (CollectionUtils.isEmpty(gourmetIds)) {
-            // 返回随机美食
-            GourmetQueryDto gourmetQueryDto = new GourmetQueryDto();
-            gourmetQueryDto.setIsAudit(true);
-            gourmetQueryDto.setIsPublish(true);
-            List<GourmetVO> allGourmets = gourmetMapper.query(gourmetQueryDto);
-            // 随机打乱
-            Collections.shuffle(allGourmets);
-            // 取指定数量
-            int count = Math.min(item, allGourmets.size());
-            List<GourmetVO> randomGourmets = allGourmets.subList(0, count);
-            return ApiResult.success(randomGourmets);
+
+        log.info("用户 {} 偏好分类: {}", userId, preferredCategories);
+
+        // 获取用户已交互的内容ID
+        Set<Integer> interactedIds = userBehaviors.stream()
+                .map(UserBehaviorWeightDto::getContentId)
+                .collect(Collectors.toSet());
+
+        // 从偏好分类中推荐内容
+        List<GourmetVO> recommendations = new ArrayList<>();
+        for (Integer categoryId : preferredCategories) {
+            if (recommendations.size() >= item) {
+                break;
+            }
+            GourmetQueryDto queryDto = new GourmetQueryDto();
+            queryDto.setCategoryId(categoryId);
+            queryDto.setIsAudit(true);
+            queryDto.setIsPublish(true);
+            List<GourmetVO> categoryGourmets = gourmetMapper.query(queryDto);
+
+            // 过滤已交互的内容并随机选择
+            List<GourmetVO> newGourmets = categoryGourmets.stream()
+                    .filter(g -> !interactedIds.contains(g.getId()))
+                    .collect(Collectors.toList());
+            Collections.shuffle(newGourmets);
+
+            int needCount = item - recommendations.size();
+            int addCount = Math.min(needCount, newGourmets.size());
+            recommendations.addAll(newGourmets.subList(0, addCount));
         }
-        // TODO 还需要进一步优化
-        List<Integer> ids = new ArrayList<>();
-        for (Long gourmetId : gourmetIds) {
-            ids.add(Integer.parseInt(String.valueOf(gourmetId)));
+
+        return recommendations;
+    }
+
+    /**
+     * 热门推荐
+     * 基于浏览量、点赞数、收藏数计算热度进行推荐
+     *
+     * @param item 推荐数量
+     * @return 推荐美食列表
+     */
+    private List<GourmetVO> getHotRecommendations(int item) {
+        GourmetQueryDto queryDto = new GourmetQueryDto();
+        queryDto.setIsAudit(true);
+        queryDto.setIsPublish(true);
+        List<GourmetVO> allGourmets = gourmetMapper.query(queryDto);
+
+        if (CollectionUtils.isEmpty(allGourmets)) {
+            return Collections.emptyList();
         }
-        // 最终推荐的美食做法
-        List<GourmetVO> gourmetVOS = gourmetMapper.queryByIds(ids);
-        return ApiResult.success(gourmetVOS);
+
+        // 按热度排序（浏览量 + 点赞数×10 + 收藏数×15）
+        List<GourmetVO> sortedGourmets = allGourmets.stream()
+                .sorted((g1, g2) -> {
+                    int hotScore1 = (g1.getViewCount() != null ? g1.getViewCount() : 0) 
+                            + (g1.getUpvoteCount() != null ? g1.getUpvoteCount() : 0) * 10 
+                            + (g1.getSaveCount() != null ? g1.getSaveCount() : 0) * 15;
+                    int hotScore2 = (g2.getViewCount() != null ? g2.getViewCount() : 0) 
+                            + (g2.getUpvoteCount() != null ? g2.getUpvoteCount() : 0) * 10 
+                            + (g2.getSaveCount() != null ? g2.getSaveCount() : 0) * 15;
+                    return Integer.compare(hotScore2, hotScore1);
+                })
+                .collect(Collectors.toList());
+
+        int count = Math.min(item, sortedGourmets.size());
+        return sortedGourmets.subList(0, count);
+    }
+
+    /**
+     * 随机推荐（兜底策略）
+     *
+     * @param item 推荐数量
+     * @return 推荐美食列表
+     */
+    private List<GourmetVO> getRandomRecommendations(int item) {
+        GourmetQueryDto queryDto = new GourmetQueryDto();
+        queryDto.setIsAudit(true);
+        queryDto.setIsPublish(true);
+        List<GourmetVO> allGourmets = gourmetMapper.query(queryDto);
+
+        if (CollectionUtils.isEmpty(allGourmets)) {
+            return Collections.emptyList();
+        }
+
+        Collections.shuffle(allGourmets);
+        int count = Math.min(item, allGourmets.size());
+        return new ArrayList<>(allGourmets.subList(0, count));
+    }
+
+    /**
+     * 过滤用户已交互过的内容
+     *
+     * @param gourmetIds 美食ID列表
+     * @param userId     用户ID
+     * @return 过滤后的ID列表
+     */
+    private List<Integer> filterUserInteracted(List<Integer> gourmetIds, Integer userId) {
+        List<UserBehaviorWeightDto> userBehaviors = interactionMapper.queryUserBehaviorByUserId(userId);
+        if (CollectionUtils.isEmpty(userBehaviors)) {
+            return gourmetIds;
+        }
+        Set<Integer> interactedIds = userBehaviors.stream()
+                .map(UserBehaviorWeightDto::getContentId)
+                .collect(Collectors.toSet());
+        return gourmetIds.stream()
+                .filter(id -> !interactedIds.contains(id))
+                .collect(Collectors.toList());
     }
 
 }

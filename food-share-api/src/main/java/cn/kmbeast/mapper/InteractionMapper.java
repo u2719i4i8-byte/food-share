@@ -2,6 +2,7 @@ package cn.kmbeast.mapper;
 
 import cn.kmbeast.pojo.dto.query.extend.InteractionQueryDto;
 import cn.kmbeast.pojo.dto.query.extend.InteractionStaticQueryDto;
+import cn.kmbeast.pojo.dto.query.extend.UserBehaviorWeightDto;
 import cn.kmbeast.pojo.entity.Interaction;
 import cn.kmbeast.pojo.vo.InteractionVO;
 import cn.kmbeast.pojo.vo.WhoLikedMeVO;
@@ -46,5 +47,19 @@ public interface InteractionMapper {
     List<WhoLikedMeVO> queryWhoLikedMe(InteractionQueryDto interactionQueryDto);
 
     Integer countWhoLikedMe(InteractionQueryDto interactionQueryDto);
+
+    /**
+     * 查询所有用户的综合行为数据
+     * 用于基于用户行为的推荐算法
+     * @return 用户行为权重列表
+     */
+    List<UserBehaviorWeightDto> queryUserBehaviorWeights();
+
+    /**
+     * 查询指定用户的综合行为数据
+     * @param userId 用户ID
+     * @return 用户行为权重列表
+     */
+    List<UserBehaviorWeightDto> queryUserBehaviorByUserId(@Param(value = "userId") Integer userId);
 
 }

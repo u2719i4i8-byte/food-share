@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 评分的Dto类
+ * 用于推荐算法中的用户-物品评分数据
  */
 @Data
 @AllArgsConstructor
@@ -20,7 +21,7 @@ public class RatingDto {
      */
     private Integer itemId;
     /**
-     * 评分
+     * 评分（支持浮点数，用于综合行为权重）
      */
-    private Integer score;
+    private Float score;
 }
