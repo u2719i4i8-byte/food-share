@@ -186,6 +186,7 @@ public class UserServiceImpl implements UserService {
             return ApiResult.error("更新信息不能为空");
         }
         User updateEntity = User.builder().id(LocalThreadHolder.getUserId()).build();
+        Objects.requireNonNull(updateEntity, "用户实体不能为空");
         BeanUtils.copyProperties(userUpdateDTO, updateEntity);
         userMapper.update(updateEntity);
         return ApiResult.success();

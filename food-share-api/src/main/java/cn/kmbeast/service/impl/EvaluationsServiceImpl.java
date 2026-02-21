@@ -62,12 +62,10 @@ public class EvaluationsServiceImpl implements EvaluationsService {
         List<CommentParentVO> parentComments = evaluationsMapper.getParentComments(
                 contentId,
                 LocalThreadHolder.getUserId(),
-                contentType
-        );
+                contentType);
         Integer count = evaluationsMapper.totalCount(contentId, contentType);
         return ApiResult.success(new EvaluationsVO(count, parentComments));
     }
-
 
     /**
      * 判断用户是否已点赞
@@ -76,6 +74,7 @@ public class EvaluationsServiceImpl implements EvaluationsService {
      * @param userId  用户ID
      * @return 是否已点赞
      */
+    @SuppressWarnings("unused")
     private boolean isUserUpvote(String voteStr, String userId) {
         return Optional.ofNullable(voteStr)
                 .map(s -> Arrays.asList(s.split(",")))
@@ -89,6 +88,7 @@ public class EvaluationsServiceImpl implements EvaluationsService {
      * @param voteStr 点赞用户ID字符串（逗号分隔）
      * @return 点赞数
      */
+    @SuppressWarnings("unused")
     private int countVotes(String voteStr) {
         return Optional.ofNullable(voteStr)
                 .map(s -> s.split(",").length)
